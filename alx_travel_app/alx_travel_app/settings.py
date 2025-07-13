@@ -124,6 +124,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ✅ Chapa API Secret Key
 CHAPA_SECRET_KEY = env("CHAPA_SECRET_KEY")
 
+# Celery Configuration
+CELERY_BROKER_URL = 'amqp://localhost'  # pour RabbitMQ
+
+
 # ✅ (Optionnel) Email settings for payment confirmation
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
