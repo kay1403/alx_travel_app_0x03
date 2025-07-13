@@ -4,8 +4,11 @@ import uuid
 from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
-from .models import Payment
+from rest_framework import status, viewsets
+from .models import Payment, Booking
+from .serializers import BookingSerializer
+from .tasks import send_booking_confirmation_email
+
 
 class InitiatePaymentView(APIView):
     def post(self, request):
@@ -61,9 +64,18 @@ class VerifyPaymentView(APIView):
                 payment = Payment.objects.get(transaction_id=tx_ref)
                 if status_code == "success":
                     payment.status = "Completed"
+                    payment.save()
+
+                    try:
+                        booking = Booking.objects.get(reference=payment.booking_reference)
+                        user_email = booking.user.email
+                        booking_details = f"Booking for {booking.property.name} on {booking.date}"
+                        send_booking_confirmation_email.delay(user_email, booking_details)
+                    except Booking.DoesNotExist:
+                        pass
                 else:
                     payment.status = "Failed"
-                payment.save()
+                    payment.save()
             except Payment.DoesNotExist:
                 return Response({"error": "Transaction not found"}, status=404)
 
@@ -72,3 +84,12 @@ class VerifyPaymentView(APIView):
         return Response({"error": "Verification failed"}, status=500)
 
 
+class BookingViewSet(viewsets.ModelViewSet):
+    queryset = Booking.objects.all()
+    serializer_class = BookingSerializer
+
+    def perform_create(self, serializer):
+        booking = serializer.save()
+        user_email = booking.user.email
+        booking_details = f"Booking for {booking.property.name} on {booking.date}"
+        send_booking_confirmation_email.delay(user_email, booking_details)
